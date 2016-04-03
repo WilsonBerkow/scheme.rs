@@ -4,7 +4,7 @@ use std::str::FromStr;
 use std::clone::Clone;
 use std::slice::Iter;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum Token<'a> {
     Symbol(&'a str),
     Number(f64),
@@ -153,12 +153,12 @@ pub struct ClingyIter<'a, T> where T: 'a, T: Clone {
 }
 
 impl<'a, T> ClingyIter<'a, T> where T: 'a, T: Clone {
-    fn new(iter: Iter<'a, T>) -> ClingyIter<'a, T> {
+    pub fn new(iter: Iter<'a, T>) -> ClingyIter<'a, T> {
         let mut citer = ClingyIter { iter: iter, item: None };
         citer.advance();
         citer
     }
-    fn advance(&mut self) -> &mut ClingyIter<'a, T> {
+    pub fn advance(&mut self) -> &mut ClingyIter<'a, T> {
         self.item = self.iter.next();
         //match self.iter.next() {
         //    Some(thing) => self.item = Some(*thing),
@@ -166,5 +166,5 @@ impl<'a, T> ClingyIter<'a, T> where T: 'a, T: Clone {
         //}
         self
     }
-    fn value(&self) -> Option<&T> { self.item.clone() }
+    pub fn value(&self) -> Option<&T> { self.item.clone() }
 }
