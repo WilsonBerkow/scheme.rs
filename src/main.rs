@@ -3,6 +3,7 @@ use std::io::Write;
 
 mod parse;
 mod util;
+mod eval;
 
 fn main() {
     println!("Welcome to Scheme!");
@@ -22,6 +23,14 @@ fn main() {
                         let mut citer = util::ClingyIter::new(toks.iter());
                         while let Ok(sexp) = parse::read_sexp(&mut citer) {
                             println!(": {:?}", sexp);
+                            match eval::eval(&eval::arith_table(), sexp) {
+                                Ok(sval) => {
+                                    println!("= {:?}", sval);
+                                },
+                                Err(e) => {
+                                    println!("Eval error! {:?}", e);
+                                },
+                            }
                         }
                     },
                     Err(e) => {

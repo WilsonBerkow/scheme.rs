@@ -1,12 +1,14 @@
+use std::collections::linked_list::LinkedList;
 use util::Token;
 use util::ClingyIter;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Sexp {
-    List(Vec<Sexp>), // nil is List(vec![])
+    List(LinkedList<Sexp>), // nil is List(vec![])
     Symbol(String),
     Number(f64),
     Bool(bool),
+    // todo: Char(char), String(String)
 }
 
 pub fn read_sexp<'a>(mut citer: &mut ClingyIter<Token<'a>>)
@@ -27,7 +29,7 @@ pub fn read_sexp<'a>(mut citer: &mut ClingyIter<Token<'a>>)
             },
             Token::RightParen => Err("Unexpected ')'"),
             Token::LeftParen => {
-                let mut contents = vec![];
+                let mut contents = LinkedList::new();//vec![];
                 citer.advance();
                 while let Some(&token) = citer.value() {
                     if let Token::RightParen = token {
@@ -35,7 +37,7 @@ pub fn read_sexp<'a>(mut citer: &mut ClingyIter<Token<'a>>)
                         break;
                     } else {
                         match read_sexp(&mut citer) {
-                            Ok(sexp) => contents.push(sexp),
+                            Ok(sexp) => contents.push_back(sexp),
                             Err(e) => {
                                 return Err(e);
                             },

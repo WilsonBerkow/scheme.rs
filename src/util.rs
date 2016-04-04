@@ -9,6 +9,7 @@ pub enum Token<'a> {
     Symbol(&'a str),
     Number(f64),
     Bool(bool), // #t and #f
+    // Todo: String(String),
     LeftParen,
     RightParen,
 }
@@ -41,6 +42,7 @@ pub fn is_symbol_char(ch: char) -> bool {
     ch.is_alphanumeric() || others.contains(&pat[0..1])
 }
 
+// lexer for s-expressions
 pub fn tokenize<'a>(src: &'a String) -> Result<Vec<Token<'a>>, LexError<'a>> {
     let mut tokens: Vec<Token> = vec![];
     let mut parsing = ParsingState::Ready;
