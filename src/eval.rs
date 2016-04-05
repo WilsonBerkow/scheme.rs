@@ -147,7 +147,7 @@ pub fn eval_from_src(src: String) -> Result<SValue, String> {
     let tokens = util::tokenize(&src);
     if let Ok(toks) = tokens {
         if let Ok(ast) = parse::read_sexp(&mut util::ClingyIter::new(toks.iter())) {
-            eval(&SymTable::empty(), ast)
+            eval(&mut SymTable::empty(), ast)
         } else {
             Err(String::from("sdfjklsdfjkl"))
         }
@@ -173,7 +173,7 @@ fn invoc_sub_scope<'a>(table: &'a SymTable, params: LinkedList<String>, args: Li
     new_scope
 }
 
-fn eval_all(table: &SymTable, ll: LinkedList<Sexp>) -> Result<LinkedList<SValue>, String> {
+fn eval_all(table: &mut SymTable, ll: LinkedList<Sexp>) -> Result<LinkedList<SValue>, String> {
     let mut vals = LinkedList::new();
     for x in ll {
         match eval(table, x) {
@@ -185,7 +185,7 @@ fn eval_all(table: &SymTable, ll: LinkedList<Sexp>) -> Result<LinkedList<SValue>
 }
 
 // TODO: parameterize by stx_forms to allow macro extensibility
-pub fn eval<'a>(table: &'a SymTable, sexp: Sexp) -> Result<SValue, String> {
+pub fn eval<'a>(table: &'a mut SymTable, sexp: Sexp) -> Result<SValue, String> {
     match sexp {
         Sexp::Number(f) => Ok(SValue::Number(f)),
 
@@ -205,6 +205,22 @@ pub fn eval<'a>(table: &'a SymTable, sexp: Sexp) -> Result<SValue, String> {
                 if check_sym(&cmd, "quote") {
                     Ok(quote(&Sexp::List(item_ll)))
 
+                } else if check_sym(&cmd, "define") {
+                    if let Some(Sexp::Symbol(s)) = item_ll.pop_front() {
+                        if let Some(sexp) = item_ll.pop_front() {
+                            match eval(table, sexp) {
+                                Ok(v) => {
+                                    table.assign(&s, v);
+                                    Ok(SValue::nil())
+                                },
+                                Err(e) => Err(e)
+                            }
+                        } else {
+                            Err(String::from("Expected value in define statement"))
+                        }
+                    } else {
+                        Err(String::from("Expected symbol after `define`"))
+                    }
                 } else if check_sym(&cmd, "lambda") {
                     if let Some(Sexp::List(arg_sexps)) = item_ll.pop_front() {
                         match get_param_list(arg_sexps) {
@@ -238,8 +254,8 @@ pub fn eval<'a>(table: &'a SymTable, sexp: Sexp) -> Result<SValue, String> {
                             // item_ll is the list of args
                             match eval_all(table, item_ll) {
                                 Ok(args) => {
-                                    let new_table = invoc_sub_scope(table, params, args);
-                                    eval(&new_table, body)
+                                    let mut new_table = invoc_sub_scope(table, params, args);
+                                    eval(&mut new_table, body)
                                 },
                                 Err(e) => Err(e),
                             }

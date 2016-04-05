@@ -7,6 +7,7 @@ mod eval;
 
 fn main() {
     println!("Welcome to Scheme!");
+    let mut scope = eval::arith_table();
     loop {
         print!("> ");
         io::stdout().flush();
@@ -23,7 +24,7 @@ fn main() {
                         let mut citer = util::ClingyIter::new(toks.iter());
                         while let Ok(sexp) = parse::read_sexp(&mut citer) {
                             println!(": {:?}", sexp);
-                            match eval::eval(&eval::arith_table(), sexp) {
+                            match eval::eval(&mut scope, sexp) {
                                 Ok(sval) => {
                                     println!("= {:?}", sval);
                                 },
