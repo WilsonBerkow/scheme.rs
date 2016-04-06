@@ -9,7 +9,7 @@ pub enum SValue {
     Symbol(String),
     Number(f64),
     Bool(bool),
-    Lambda(LinkedList<String>, Sexp), // a list of args and an expression
+    Lambda(SymTable, LinkedList<String>, Sexp),
     //Closure(&'a mut SymTable<'a>, Vec<String>, Sexp), // an environment a list of params and a return expression
 }
 
@@ -165,6 +165,13 @@ pub fn arith_table() -> SymTable {
     }
 }
 
+// todo: make lambdas capture environ; put values in Boxes; add  mutability
+// tables like prototypes, having links to superscopes
+
+fn mk_sub_scope(table: &SymTable) -> SymTable {
+    table.clone()
+}
+
 fn invoc_sub_scope<'a>(table: &'a SymTable, params: LinkedList<String>, args: LinkedList<SValue>) -> SymTable {
     let mut new_scope = table.clone();
     for (name, val) in params.iter().zip(args.iter()) {
@@ -226,7 +233,7 @@ pub fn eval<'a>(table: &'a mut SymTable, sexp: Sexp) -> Result<SValue, String> {
                         match get_param_list(arg_sexps) {
                             Ok(params) => {
                                 if let Some(body) = item_ll.pop_front() {
-                                    Ok(SValue::Lambda(params, body))
+                                    Ok(SValue::Lambda(mk_sub_scope(table), params, body))
                                 } else {
                                     Err(String::from("Expected body after argument list in lambda"))
                                 }
@@ -250,11 +257,11 @@ pub fn eval<'a>(table: &'a mut SymTable, sexp: Sexp) -> Result<SValue, String> {
                     binop(op, ident, vals)
                 } else {
                     match eval(table, cmd) {
-                        Ok(SValue::Lambda(params, body)) => {
+                        Ok(SValue::Lambda(mut sub_table, params, body)) => {
                             // item_ll is the list of args
                             match eval_all(table, item_ll) {
                                 Ok(args) => {
-                                    let mut new_table = invoc_sub_scope(table, params, args);
+                                    let mut new_table = invoc_sub_scope(&mut sub_table, params, args);
                                     eval(&mut new_table, body)
                                 },
                                 Err(e) => Err(e),
