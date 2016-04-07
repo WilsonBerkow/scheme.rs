@@ -244,9 +244,14 @@ pub fn eval<'a>(table: &'a mut SymTable, sexp: Sexp) -> Result<SValue, String> {
 
         Sexp::List(items) => {
             let mut item_ll = items.clone();
+
             if let Some(cmd) = item_ll.pop_front() {
                 if check_sym(&cmd, "quote") {
-                    Ok(quote(&Sexp::List(item_ll)))
+                    if let Some(sexp) = item_ll.pop_front() {
+                        Ok(quote(&sexp))
+                    } else {
+                        Err(String::from("`quote` expected 1 arg; was given 0"))
+                    }
 
                 } else if check_sym(&cmd, "define") {
                     if let Some(Sexp::Symbol(s)) = item_ll.pop_front() {
@@ -264,6 +269,7 @@ pub fn eval<'a>(table: &'a mut SymTable, sexp: Sexp) -> Result<SValue, String> {
                     } else {
                         Err(String::from("Expected symbol after `define`"))
                     }
+
                 } else if check_sym(&cmd, "lambda") {
                     if let Some(Sexp::List(arg_sexps)) = item_ll.pop_front() {
                         match get_param_list(arg_sexps) {
@@ -292,6 +298,7 @@ pub fn eval<'a>(table: &'a mut SymTable, sexp: Sexp) -> Result<SValue, String> {
                     } else {
                         Err(String::from("`display` expected 1 arg; was given 0"))
                     }
+
                 } else if check_sym(&cmd, "write") {
                     if let Some(sexp) = item_ll.pop_front() {
                         match eval(table, sexp) {
@@ -304,6 +311,7 @@ pub fn eval<'a>(table: &'a mut SymTable, sexp: Sexp) -> Result<SValue, String> {
                     } else {
                         Err(String::from("`write` expected 1 arg; was given 0"))
                     }
+
                 } else if let Some((op, ident)) = check_binop(&cmd) {
                     let mut vals = LinkedList::new();
                     for e in item_ll {
@@ -315,6 +323,7 @@ pub fn eval<'a>(table: &'a mut SymTable, sexp: Sexp) -> Result<SValue, String> {
                         }
                     }
                     binop(op, ident, vals)
+
                 } else {
                     match eval(table, cmd) {
                         Ok(SValue::Lambda(mut sub_table, params, body)) => {
