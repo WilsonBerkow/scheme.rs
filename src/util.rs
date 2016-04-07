@@ -1,7 +1,6 @@
 use std::ops::Index;
 use std::ops::Range;
 use std::str::FromStr;
-use std::clone::Clone;
 use std::slice::Iter;
 
 #[derive(Debug, Clone, Copy)]
@@ -9,7 +8,7 @@ pub enum Token<'a> {
     Symbol(&'a str),
     Number(f64),
     Bool(bool), // #t and #f
-    // Todo: String(String),
+    String(&'a str),
     LeftParen,
     RightParen,
 }
@@ -21,6 +20,7 @@ enum ParsingState<'a> {
     NumberAfterE(usize),
     Symbol(usize),
     Hash(usize),
+    String(usize, Option<usize>),
     Error(LexError<'a>),
 }
 
@@ -114,6 +114,24 @@ pub fn tokenize<'a>(src: &'a String) -> Result<Vec<Token<'a>>, LexError<'a>> {
                     parsing = ParsingState::Ready;
                 }
             },
+
+            ParsingState::String(start, o_esc) => {
+                match o_esc {
+                    None => { // Not in an escape sequence
+                        if c == '\\' {
+                            parsing = ParsingState::String(start, Some(i))
+                        } else if c == '"' {
+                            tokens.push(Token::String(&src[start..i]));
+                            parsing = ParsingState::Ready;
+                        }
+                    },
+                    Some(_backslash_pos) => {
+                        // ignore one character
+                        parsing = ParsingState::String(start, None);
+                    }
+                }
+            },
+
             _ => {},
         }
 
@@ -125,6 +143,9 @@ pub fn tokenize<'a>(src: &'a String) -> Result<Vec<Token<'a>>, LexError<'a>> {
                     '#' => {
                         parsing = ParsingState::Hash(i);
                     },
+                    '"' => {
+                        parsing = ParsingState::String(i + 1, None);
+                    }
                     _ => {
                         parsing =
                             if is_number_char(c) {
@@ -148,25 +169,28 @@ pub fn tokenize<'a>(src: &'a String) -> Result<Vec<Token<'a>>, LexError<'a>> {
     }
 }
 
-#[derive(Clone)]
-pub struct ClingyIter<'a, T> where T: 'a, T: Clone {
+pub struct ClingyIter<'a, T> where T: 'a {
     iter: Iter<'a, T>, // TODO: Better solution, with a trait
     item: Option<&'a T>,
 }
 
-impl<'a, T> ClingyIter<'a, T> where T: 'a, T: Clone {
+impl<'a, T> ClingyIter<'a, T> {
     pub fn new(iter: Iter<'a, T>) -> ClingyIter<'a, T> {
         let mut citer = ClingyIter { iter: iter, item: None };
         citer.advance();
         citer
     }
-    pub fn advance(&mut self) -> &mut ClingyIter<'a, T> {
+    pub fn advance(&mut self) {
         self.item = self.iter.next();
         //match self.iter.next() {
         //    Some(thing) => self.item = Some(*thing),
         //    None => self.item = None,
         //}
-        self
     }
-    pub fn value(&self) -> Option<&T> { self.item.clone() }
+    pub fn value(&'a self) -> Option<&'a T> {
+        match self.item {
+            Some(ref x) => Some(x),
+            None => None,
+        }
+    }
 }

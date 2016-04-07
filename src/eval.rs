@@ -1,12 +1,14 @@
+use std::fmt;
 use std::collections::linked_list::LinkedList;
 use parse::Sexp;
 use parse;
 use util;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(PartialEq, Clone)]
 pub enum SValue {
     List(LinkedList<SValue>),
     Symbol(String),
+    String(String),
     Number(f64),
     Bool(bool),
     Lambda(SymTable, LinkedList<String>, Sexp),
@@ -15,6 +17,41 @@ pub enum SValue {
 
 impl SValue {
     pub fn nil() -> SValue { SValue::List(LinkedList::new()) }
+    fn r5rs_write(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            &SValue::String(ref s) => write!(f, "{:?}", s),
+            x => x.r5rs_display(f)
+        }
+    }
+    fn r5rs_display(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            &SValue::List(ref ll) => {
+                let mut s = String::new();
+                s.push('(');
+                for x in ll {
+                    s.push_str(format!("{} ", x).as_ref());
+                }
+                s.pop();
+                s.push(')');
+                write!(f, "{}", s)
+            },
+            &SValue::Symbol(ref s) => write!(f, "{}", s),
+            &SValue::String(ref s) => write!(f, "{}", s),
+            &SValue::Number(x) => write!(f, "{}", x),
+            &SValue::Bool(b) => write!(f, "{}", b),
+            &SValue::Lambda(_, _, _) => {
+                write!(f, "#<procedure>")
+            }
+        }
+    }
+}
+
+impl fmt::Display for SValue {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { self.r5rs_display(f) }
+}
+
+impl fmt::Debug for SValue {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { self.r5rs_write(f) }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -65,6 +102,7 @@ pub fn quote(sexp: &Sexp) -> SValue {
             SValue::List(
                 ll.iter().map(|x| quote(&x.clone())).collect()),
         &Sexp::Symbol(ref s) => SValue::Symbol(s.clone()),
+        &Sexp::String(ref s) => SValue::String(s.clone()),
         &Sexp::Number(ref f) => SValue::Number(f.clone()),
         &Sexp::Bool(ref b) => SValue::Bool(b.clone()),
     }
@@ -94,11 +132,6 @@ fn get_binop(s: String) -> Option<(Box<BinOp>, SValue)> {
             Some((f, SValue::Number(0f64)))
         },
 
-        // "-" => Some((Box::new(|x: SValue, y: SValue| match (x, y) {
-        //     (SValue::Number(fx), SValue::Number(fy)) => Ok(SValue::Number(fx - fy)),
-        //     _ => Err(String::from("Expected numbers for -")),
-        // }), SValue::Number(0f64))),
-
         "*" => Some((Box::new(|x: SValue, y: SValue| match (x, y) {
             (SValue::Number(fx), SValue::Number(fy)) => Ok(SValue::Number(fx * fy)),
             _ => Err(String::from("Expected numbers for *")),
@@ -109,6 +142,7 @@ fn get_binop(s: String) -> Option<(Box<BinOp>, SValue)> {
             _ => Err(String::from("Expected numbers for /")),
         }), SValue::Number(1f64))),
 
+        // Todo: do as macro?
         // "and" => {
         //     let f = Box::new(|x, y| match (x, y) {
         //         (SValue::Bool(p), SValue::Bool(q)) =>
@@ -206,6 +240,8 @@ pub fn eval<'a>(table: &'a mut SymTable, sexp: Sexp) -> Result<SValue, String> {
             }
         },
 
+        Sexp::String(s) => Ok(SValue::String(s)),
+
         Sexp::List(items) => {
             let mut item_ll = items.clone();
             if let Some(cmd) = item_ll.pop_front() {
@@ -244,7 +280,31 @@ pub fn eval<'a>(table: &'a mut SymTable, sexp: Sexp) -> Result<SValue, String> {
                         Err(String::from("Expected argument list after `lambda`"))
                     }
 
-                } else if let Some((op, ident)) = check_binop(&cmd) {//isBinop(//check_sym(&cmd, "+") {
+                } else if check_sym(&cmd, "display") {
+                    if let Some(sexp) = item_ll.pop_front() {
+                        match eval(table, sexp) {
+                            Ok(v) => {
+                                println!("{}", v);
+                                Ok(SValue::nil())
+                            },
+                            Err(e) => Err(e),
+                        }
+                    } else {
+                        Err(String::from("`display` expected 1 arg; was given 0"))
+                    }
+                } else if check_sym(&cmd, "write") {
+                    if let Some(sexp) = item_ll.pop_front() {
+                        match eval(table, sexp) {
+                            Ok(v) => {
+                                println!("{:?}", v);
+                                Ok(SValue::nil())
+                            },
+                            Err(e) => Err(e),
+                        }
+                    } else {
+                        Err(String::from("`write` expected 1 arg; was given 0"))
+                    }
+                } else if let Some((op, ident)) = check_binop(&cmd) {
                     let mut vals = LinkedList::new();
                     for e in item_ll {
                         let rval = eval(table, e);
@@ -270,52 +330,10 @@ pub fn eval<'a>(table: &'a mut SymTable, sexp: Sexp) -> Result<SValue, String> {
                         Ok(_) => Err(String::from("Expected callable value")),
                         Err(e) => Err(e),
                     }
-                    //Ok(SValue::Bool(true))
                 }
             } else {
                 Err(String::from("Unexpected ()"))
             }
-
-            //let citer = ClingyIter::new(items.iter());
-            //let iter = items.iter();
-            //let iter = OwnIter::from_ll(vec_to_llr(items));
-            //if let (Some(cmd), iter) = iter.next() {
-                // match cmd {
-                //     Sexp::Symbol(s) => {
-                //         if s == "quote" {
-                //             match iter.next() {
-                //                 (Some(x), _) => Ok(&quote(x)),
-                //                 (None, _) => Err("Expected expression after ( quote"),
-                //             }
-                //         }//  else if s == "def" {
-                //         //     if let (Some(Sexp::Symbol(name)), iter) = iter.next() {
-                //         //         if let (Some(rhs_sexp), iter) = iter.next() {
-                //         //             if let Ok(rhs) = eval(&table, rhs_sexp) {
-                //         //                 table.assign(name, rhs);
-                //         //                 Ok(&nil())
-                //         //             } else {
-                //         //                 Err("Invalid right hand side of def")
-                //         //             }
-                //         //         } else {
-                //         //             Err("Expected right hand side in def")
-                //         //         }
-                //         //     } else {
-                //         //         Err("Expected symbol after ( def")
-                //         //     }
-                //         // }
-                //         else {
-                //             match iter.next() {
-                //                 (Some(x), _) => Ok(&quote(x)),
-                //                 (None, _) => Err("Expected expression after ( quote"),
-                //             } // TEMPORARY
-                //         }
-                //     },
-                //     x => Ok(&quote(x))
-                //     //Sexp::List(
-                // }
-            //} else {
-            //    Err("Expected command in list, found ()")
-            //}
         },
     }
 }

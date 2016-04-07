@@ -10,7 +10,10 @@ fn main() {
     let mut scope = eval::arith_table();
     loop {
         print!("> ");
-        io::stdout().flush();
+        if let Err(e) = io::stdout().flush() {
+            println!("Error flushing stdout! {}", e);
+            return;
+        }
         let mut input = String::new();
         match io::stdin().read_line(&mut input) {
             Ok(_) => {
