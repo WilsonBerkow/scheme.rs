@@ -16,8 +16,6 @@ pub enum Token<'a> {
 #[derive(Debug, Clone)]
 enum ParsingState<'a> {
     Ready,
-    Number(usize),
-    NumberAfterE(usize),
     Symbol(usize),
     Hash(usize),
     String(usize, Option<usize>),
@@ -36,7 +34,7 @@ pub fn is_number_char(ch: char) -> bool {
 }
 
 pub fn is_symbol_char(ch: char) -> bool {
-    let others = String::from("+-*/^!@$:");
+    let others = String::from("!$%&*+-./:<=>?@^_~");
     let mut pat = String::new();
     pat.push(ch);
     ch.is_alphanumeric() || others.contains(&pat[0..1])
@@ -50,36 +48,6 @@ pub fn tokenize<'a>(src: &'a String) -> Result<Vec<Token<'a>>, LexError<'a>> {
     for (i, c) in src.char_indices() {
         match parsing {
             ParsingState::Error(_) => break,
-
-            ParsingState::Number(start) => {
-                if c == 'e' || c == 'E' {
-                    parsing = ParsingState::NumberAfterE(start);
-                } else if !is_number_char(c) {
-                    let range = Range { start: start, end: i };
-                    let slice = src.index(range);
-                    let numres = f64::from_str(slice);
-                    if let Ok(num) = numres {
-                        tokens.push(Token::Number(num));
-                        parsing = ParsingState::Ready;
-                    } else {
-                        parsing = ParsingState::Error(LexError::IllegalNumber(slice));
-                    }
-                }
-            },
-
-            ParsingState::NumberAfterE(start) => {
-                if !c.is_digit(10) && c != '-' {
-                    let range = Range { start: start, end: i };
-                    let slice = src.index(range);
-                    let numres = f64::from_str(slice);
-                    if let Ok(num) = numres {
-                        tokens.push(Token::Number(num));
-                        parsing = ParsingState::Ready;
-                    } else {
-                        parsing = ParsingState::Error(LexError::IllegalNumber(slice));
-                    }
-                }
-            },
 
             ParsingState::Hash(start) => {
                 if i == start + 2 {
@@ -108,7 +76,13 @@ pub fn tokenize<'a>(src: &'a String) -> Result<Vec<Token<'a>>, LexError<'a>> {
                     let token = match slice {
                         "#t" => Token::Bool(true),
                         "#f" => Token::Bool(false),
-                        _ => Token::Symbol(slice),
+                        x => {
+                            if let Ok(num) = f64::from_str(slice) {
+                                Token::Number(num)
+                            } else {
+                                Token::Symbol(slice)
+                            }
+                        }
                     };
                     tokens.push(token);
                     parsing = ParsingState::Ready;
@@ -148,9 +122,7 @@ pub fn tokenize<'a>(src: &'a String) -> Result<Vec<Token<'a>>, LexError<'a>> {
                     }
                     _ => {
                         parsing =
-                            if is_number_char(c) {
-                                ParsingState::Number(i)
-                            } else if is_symbol_char(c) {
+                            if is_symbol_char(c) {
                                 ParsingState::Symbol(i)
                             } else if c.is_whitespace() {
                                 ParsingState::Ready
