@@ -29,10 +29,6 @@ pub enum LexError<'a> {
     IllegalHash(&'a str),
 }
 
-pub fn is_number_char(ch: char) -> bool {
-    ch == '-' || ch == '.' || ch.is_digit(10)
-}
-
 pub fn is_symbol_char(ch: char) -> bool {
     let others = String::from("!$%&*+-./:<=>?@^_~");
     let mut pat = String::new();
@@ -73,19 +69,29 @@ pub fn tokenize<'a>(src: &'a String) -> Result<Vec<Token<'a>>, LexError<'a>> {
                 if !is_symbol_char(c) {
                     let range = Range { start: start, end: i };
                     let slice = src.index(range);
-                    let token = match slice {
-                        "#t" => Token::Bool(true),
-                        "#f" => Token::Bool(false),
+                    match slice {
+                        "#t" => {
+                            tokens.push(Token::Bool(true));
+                            parsing = ParsingState::Ready;
+                        },
+                        "#f" => {
+                            tokens.push(Token::Bool(false));
+                            parsing = ParsingState::Ready;
+                        },
                         _ => {
                             if let Ok(num) = f64::from_str(slice) {
-                                Token::Number(num)
+                                tokens.push(Token::Number(num));
+                                parsing = ParsingState::Ready;
                             } else {
-                                Token::Symbol(slice)
+                                if i64::from_str(&slice[..1]).is_ok() {
+                                    parsing = ParsingState::Error(LexError::IllegalNumber(slice));
+                                } else {
+                                    tokens.push(Token::Symbol(slice));
+                                    parsing = ParsingState::Ready;
+                                }
                             }
                         }
-                    };
-                    tokens.push(token);
-                    parsing = ParsingState::Ready;
+                    }
                 }
             },
 
