@@ -137,11 +137,6 @@ fn get_binop(s: String) -> Option<(Box<BinOp>, SValue)> {
             _ => Err(String::from("Expected numbers for *")),
         }), SValue::Number(1f64))),
 
-        "reciprocal" => Some((Box::new(|x: SValue, y: SValue| match (x, y) {
-            (SValue::Number(fx), SValue::Number(fy)) => Ok(SValue::Number(fx / fy)),
-            _ => Err(String::from("Expected numbers for /")),
-        }), SValue::Number(1f64))),
-
         // Todo: do as macro?
         // "and" => {
         //     let f = Box::new(|x, y| match (x, y) {
@@ -312,6 +307,20 @@ pub fn eval<'a>(table: &'a mut SymTable, sexp: Sexp) -> Result<SValue, String> {
                         Err(String::from("`write` expected 1 arg; was given 0"))
                     }
 
+                } else if check_sym(&cmd, "reciprocal") {
+                    if let Some(sexp) = item_ll.pop_front() {
+                        match eval(table, sexp) {
+                            Ok(v) => {
+                                match v {
+                                    SValue::Number(f) => Ok(SValue::Number(1f64 / f)),
+                                    _ => Err(String::from("`reciprocal` expected number")),
+                                }
+                            },
+                            Err(e) => Err(e),
+                        }
+                    } else {
+                        Err(String::from("`reciprocal` expected 1 arg; was given 0"))
+                    }
                 } else if let Some((op, ident)) = check_binop(&cmd) {
                     let mut vals = LinkedList::new();
                     for e in item_ll {

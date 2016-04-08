@@ -76,7 +76,7 @@ pub fn tokenize<'a>(src: &'a String) -> Result<Vec<Token<'a>>, LexError<'a>> {
                     let token = match slice {
                         "#t" => Token::Bool(true),
                         "#f" => Token::Bool(false),
-                        x => {
+                        _ => {
                             if let Ok(num) = f64::from_str(slice) {
                                 Token::Number(num)
                             } else {
