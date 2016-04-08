@@ -9,7 +9,8 @@ pub enum SValue {
     List(LinkedList<SValue>),
     Symbol(String),
     String(String),
-    Number(f64),
+    Integer(i64),
+    Float(f64),
     Bool(bool),
     Lambda(SymTable, LinkedList<String>, Sexp),
     //Closure(&'a mut SymTable<'a>, Vec<String>, Sexp), // an environment a list of params and a return expression
@@ -17,12 +18,14 @@ pub enum SValue {
 
 impl SValue {
     pub fn nil() -> SValue { SValue::List(LinkedList::new()) }
+
     fn r5rs_write(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             &SValue::String(ref s) => write!(f, "{:?}", s),
-            x => x.r5rs_display(f)
+            _ => x.r5rs_display(f)
         }
     }
+
     fn r5rs_display(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             &SValue::List(ref ll) => {
@@ -37,7 +40,8 @@ impl SValue {
             },
             &SValue::Symbol(ref s) => write!(f, "{}", s),
             &SValue::String(ref s) => write!(f, "{}", s),
-            &SValue::Number(x) => write!(f, "{}", x),
+            &SValue::Integer(x) => write!(f, "{}", x),
+            &SValue::Float(x) => write!(f, "{}", x),
             &SValue::Bool(b) => write!(f, "{}", b),
             &SValue::Lambda(_, _, _) => {
                 write!(f, "#<procedure>")
@@ -103,7 +107,8 @@ pub fn quote(sexp: &Sexp) -> SValue {
                 ll.iter().map(|x| quote(&x.clone())).collect()),
         &Sexp::Symbol(ref s) => SValue::Symbol(s.clone()),
         &Sexp::String(ref s) => SValue::String(s.clone()),
-        &Sexp::Number(ref f) => SValue::Number(f.clone()),
+        &Sexp::Integer(ref f) => SValue::Integer(f.clone()),
+        &Sexp::Float(ref f) => SValue::Float(f.clone()),
         &Sexp::Bool(ref b) => SValue::Bool(b.clone()),
     }
 }
@@ -121,26 +126,39 @@ fn binop(op: Box<BinOp>, ident: SValue, ll: LinkedList<SValue>)
     Ok(total)
 }
 
+//fn num_bimap<T>(op: Box<Fn<T: Add>(T, T) -> T>) -> Box<BinOp> where T: Add {
+
 fn get_binop(s: String) -> Option<(Box<BinOp>, SValue)> {
     match &*s {
         "+" => {
             let f = Box::new(|x, y| match (x, y) {
-                (SValue::Number(fx), SValue::Number(fy)) =>
-                    Ok(SValue::Number(fx + fy)),
+                (SValue::Float(fx), SValue::Integer(iy)) =>
+                    Ok(SValue::Float(fx + (iy as f64))),
+                (SValue::Integer(ix), SValue::Float(fy)) =>
+                    Ok(SValue::Float((ix as f64) + fy)),
+                (SValue::Integer(ix), SValue::Integer(iy)) =>
+                    Ok(SValue::Integer(ix + iy)),
+                (SValue::Float(fx), SValue::Float(fy)) =>
+                    Ok(SValue::Float(fx + fy)),
                 _ => Err(String::from("Expected numbers for +")),
             });
-            Some((f, SValue::Number(0f64)))
+            Some((f, SValue::Integer(0i64)))
         },
 
-        "*" => Some((Box::new(|x: SValue, y: SValue| match (x, y) {
-            (SValue::Number(fx), SValue::Number(fy)) => Ok(SValue::Number(fx * fy)),
-            _ => Err(String::from("Expected numbers for *")),
-        }), SValue::Number(1f64))),
-
-        "reciprocal" => Some((Box::new(|x: SValue, y: SValue| match (x, y) {
-            (SValue::Number(fx), SValue::Number(fy)) => Ok(SValue::Number(fx / fy)),
-            _ => Err(String::from("Expected numbers for /")),
-        }), SValue::Number(1f64))),
+        "*" => {
+            let f = Box::new(|x: SValue, y: SValue| match (x, y) {
+                (SValue::Float(fx), SValue::Integer(iy)) =>
+                    Ok(SValue::Float(fx * (iy as f64))),
+                (SValue::Integer(ix), SValue::Float(fy)) =>
+                    Ok(SValue::Float((ix as f64) * fy)),
+                (SValue::Integer(ix), SValue::Integer(iy)) =>
+                    Ok(SValue::Integer(ix * iy)),
+                (SValue::Float(fx), SValue::Float(fy)) =>
+                    Ok(SValue::Float(fx * fy)),
+                _ => Err(String::from("Expected numbers for *")),
+            });
+            Some((f, SValue::Integer(1i64)))
+        },
 
         // Todo: do as macro?
         // "and" => {
@@ -228,7 +246,9 @@ fn eval_all(table: &mut SymTable, ll: LinkedList<Sexp>) -> Result<LinkedList<SVa
 // TODO: parameterize by stx_forms to allow macro extensibility
 pub fn eval<'a>(table: &'a mut SymTable, sexp: Sexp) -> Result<SValue, String> {
     match sexp {
-        Sexp::Number(f) => Ok(SValue::Number(f)),
+        Sexp::Integer(i) => Ok(SValue::Integer(i)),
+
+        Sexp::Float(f) => Ok(SValue::Float(f)),
 
         Sexp::Bool(b) => Ok(SValue::Bool(b)),
 
@@ -312,6 +332,21 @@ pub fn eval<'a>(table: &'a mut SymTable, sexp: Sexp) -> Result<SValue, String> {
                         Err(String::from("`write` expected 1 arg; was given 0"))
                     }
 
+                } else if check_sym(&cmd, "reciprocal") {
+                    if let Some(sexp) = item_ll.pop_front() {
+                        match eval(table, sexp) {
+                            Ok(v) => {
+                                match v {
+                                    SValue::Integer(i) => Ok(SValue::Float(1f64 / (i as f64))),
+                                    SValue::Float(f) => Ok(SValue::Float(1f64 / f)),
+                                    _ => Err(String::from("`reciprocal` expected integer or float")),
+                                }
+                            },
+                            Err(e) => Err(e),
+                        }
+                    } else {
+                        Err(String::from("`reciprocal` expected 1 arg; was given 0"))
+                    }
                 } else if let Some((op, ident)) = check_binop(&cmd) {
                     let mut vals = LinkedList::new();
                     for e in item_ll {

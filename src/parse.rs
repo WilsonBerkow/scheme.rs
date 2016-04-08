@@ -7,7 +7,8 @@ pub enum Sexp {
     List(LinkedList<Sexp>), // nil is List(vec![])
     Symbol(String),
     String(String),
-    Number(f64),
+    Integer(i64),
+    Float(f64),
     Bool(bool),
     // todo: Char(char), String(String)
 }
@@ -64,9 +65,13 @@ pub fn read_sexp<'a>(mut citer: &mut ClingyIter<Token<'a>>)
                     Err(e) => Err(e),
                 }
             },
-            Token::Number(num) => {
+            Token::Integer(num) => {
                 citer.advance();
-                Ok(Sexp::Number(num))
+                Ok(Sexp::Integer(num))
+            },
+            Token::Float(num) => {
+                citer.advance();
+                Ok(Sexp::Float(num))
             },
             Token::Bool(b) => {
                 citer.advance();

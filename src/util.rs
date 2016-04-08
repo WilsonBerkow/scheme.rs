@@ -6,7 +6,8 @@ use std::slice::Iter;
 #[derive(Debug, Clone, Copy)]
 pub enum Token<'a> {
     Symbol(&'a str),
-    Number(f64),
+    Integer(i64),
+    Float(f64),
     Bool(bool), // #t and #f
     String(&'a str),
     LeftParen,
@@ -73,19 +74,32 @@ pub fn tokenize<'a>(src: &'a String) -> Result<Vec<Token<'a>>, LexError<'a>> {
                 if !is_symbol_char(c) {
                     let range = Range { start: start, end: i };
                     let slice = src.index(range);
-                    let token = match slice {
-                        "#t" => Token::Bool(true),
-                        "#f" => Token::Bool(false),
-                        x => {
-                            if let Ok(num) = f64::from_str(slice) {
-                                Token::Number(num)
+                    match slice {
+                        "#t" => {
+                            tokens.push(Token::Bool(true));
+                            parsing = ParsingState::Ready;
+                        },
+                        "#f" => {
+                            tokens.push(Token::Bool(false));
+                            parsing = ParsingState::Ready;
+                        },
+                        _ => {
+                            if let Ok(num) = i64::from_str(slice) {
+                                tokens.push(Token::Integer(num));
+                                parsing = ParsingState::Ready;
+                            } else if let Ok(num) = f64::from_str(slice) {
+                                tokens.push(Token::Float(num));
+                                parsing = ParsingState::Ready;
                             } else {
-                                Token::Symbol(slice)
+                                if i64::from_str(&slice[..1]).is_ok() {
+                                    parsing = ParsingState::Error(LexError::IllegalNumber(slice));
+                                } else {
+                                    tokens.push(Token::Symbol(slice));
+                                    parsing = ParsingState::Ready;
+                                }
                             }
                         }
                     };
-                    tokens.push(token);
-                    parsing = ParsingState::Ready;
                 }
             },
 
